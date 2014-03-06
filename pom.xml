@@ -1,0 +1,105 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>edu.virginia.lib.aptrust</groupId>
+  <artifactId>bagger</artifactId>
+  <version>1.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
+
+  <name>bagger</name>
+  <url>http://maven.apache.org</url>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <build>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>properties-maven-plugin</artifactId>
+                <version>1.0-alpha-2</version>
+                <executions>
+                    <execution>
+                        <id>ex1</id>
+                        <phase>initialize</phase>
+                        <goals>
+                            <goal>read-project-properties</goal>
+                        </goals>
+                        <configuration>
+                            <files>
+                                <file>fedora.properties</file>
+                                <file>bagger.properties</file>
+                            </files>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>ex2</id>
+                        <goals>
+                            <goal>set-system-properties</goal>
+                        </goals>
+                        <configuration>
+                            <properties>
+                                <property>
+                                    <name>fedora-url</name>
+                                    <value>${fedora-url}</value>
+                                </property>
+                                <property>
+                                    <name>fedora-username</name>
+                                    <value>${fedora-username}</value>
+                                </property>
+                                <property>
+                                    <name>fedora-password</name>
+                                    <value>${fedora-password}</value>
+                                </property>
+                                <property>
+                                    <name>bagger.bag-output-dir</name>
+                                    <value>${bag-output-dir}</value>
+                                </property>
+                                <property>
+                                    <name>bagger.source-organization</name>
+                                    <value>${source-organization}</value>
+                                </property>
+                                <property>
+                                    <name>bagger.source-organization-ud</name>
+                                    <value>${source-organization-id}</value>
+                                </property>
+
+                            </properties>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+  </build>
+
+  <dependencies>
+      <dependency>
+          <groupId>commons-io</groupId>
+          <artifactId>commons-io</artifactId>
+          <version>2.4</version>
+      </dependency>
+    <dependency>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-compress</artifactId>
+        <version>1.7</version>
+    </dependency>
+    <dependency>
+        <groupId>gov.loc</groupId>
+        <artifactId>bagit</artifactId>
+        <version>4.8</version>
+    </dependency>
+    <dependency>
+        <groupId>com.yourmediashelf.fedora.client</groupId>
+        <artifactId>fedora-client-core</artifactId>
+        <version>0.3</version>
+    </dependency>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.11</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+</project>
