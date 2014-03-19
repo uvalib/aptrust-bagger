@@ -61,7 +61,7 @@ public class FileBagTest extends APTrustBagTest {
         APTrustInfo aptrustInfo = new APTrustInfo("Title", APTrustInfo.CONSORTIA);
 
         FileBag b = new FileBag(bagInfo, aptrustInfo, id, f1, f2);
-        b.serializeAPTrustBag(outputDir);
+        b.serializeAPTrustBag(outputDir, false);
 
         final BagFactory f = new BagFactory();
         Bag parsedBag = f.createBag(new File(outputDir, b.getInstitutionalId() + "." + b.getItemId()));
@@ -82,7 +82,7 @@ public class FileBagTest extends APTrustBagTest {
         APTrustInfo aptrustInfo = new APTrustInfo("Title", APTrustInfo.CONSORTIA);
 
         FileBag b = new FileBag(bagInfo, aptrustInfo, id, f1, f2);
-        b.serializeAPTrustBag(outputDir);
+        b.serializeAPTrustBag(outputDir, false);
 
         File bagRoot = new File(outputDir, b.getInstitutionalId() + "." + b.getItemId());
         File f1InBag = new File(bagRoot, "data" + File.separator + f1.getName());

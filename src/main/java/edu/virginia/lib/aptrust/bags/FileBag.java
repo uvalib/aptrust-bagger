@@ -9,7 +9,7 @@ import java.util.List;
 
 /**
  * A class that can be used to build an APTrust bag from content that is
- * stored as accessible files.  All of teh contents and metadata are expected
+ * stored as accessible files.  All of the contents and metadata are expected
  * to be supplied to the constructor.
  */
 public class FileBag extends APTrustBag {

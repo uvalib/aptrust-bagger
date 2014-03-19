@@ -9,10 +9,19 @@ import gov.loc.repository.bagit.ManifestWriter;
 import gov.loc.repository.bagit.impl.StringBagFile;
 import gov.loc.repository.bagit.utilities.MessageDigestHelper;
 import gov.loc.repository.bagit.writer.impl.FileSystemWriter;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
+import org.xeustechnologies.jtar.TarEntry;
+import org.xeustechnologies.jtar.TarOutputStream;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -32,10 +41,13 @@ public abstract class APTrustBag {
 
     /**
      * Creates an AP Trust compliant bag
-     * @param destinationDir
+     * @param destinationDir the directory into which the bag will be serialized
+     * @param tar if true, a tar file will be the ultimate output, if false a simple
+     *            directory structure (note: the current implementation writes out
+     *            a directory structure first and tars it second)
      * @throws Exception
      */
-    public void serializeAPTrustBag(File destinationDir) throws Exception {
+    public void serializeAPTrustBag(File destinationDir, boolean tar) throws Exception {
         if (!destinationDir.exists()) {
             destinationDir.mkdirs();
         } else {
@@ -90,13 +102,43 @@ public abstract class APTrustBag {
             aptrustInfoOS.close();
         }
 
-
         b.addFilesToPayload(getPayloadFiles());
         b.write(new FileSystemWriter(f), file);
 
         manifestFile.delete();
         aptrustInfoFile.delete();
         bagInfoFile.delete();
+
+        if (tar) {
+            tarDirectory(file);
+            FileUtils.deleteDirectory(file);
+        }
+    }
+
+    private void tarDirectory(final File file) throws IOException {
+        final FileOutputStream dest = new FileOutputStream(file.getAbsolutePath() + ".tar");
+        TarOutputStream out = new TarOutputStream(new BufferedOutputStream(dest));
+        for(File f : getFilesWithinDir(file, new ArrayList<File>())){
+            out.putNextEntry(new TarEntry(f, f.getAbsolutePath().substring(file.getParentFile().getAbsolutePath().length())));
+            FileInputStream fis = new FileInputStream(f);
+            try {
+                IOUtils.copy(fis, out);
+            } finally {
+                fis.close();
+            }
+        }
+        out.close();
+    }
+
+    public List<File> getFilesWithinDir(File dir, List<File> result) {
+        for (File f : dir.listFiles()) {
+            if (f.isDirectory()) {
+                getFilesWithinDir(f, result);
+            } else {
+                result.add(f);
+            }
+        }
+        return result;
     }
 
     private String getAptrustBagName() {
