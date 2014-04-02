@@ -45,9 +45,11 @@ public abstract class APTrustBag {
      * @param tar if true, a tar file will be the ultimate output, if false a simple
      *            directory structure (note: the current implementation writes out
      *            a directory structure first and tars it second)
+     * @return the file that represents the root of the bag (either the tar file or
+     * the bag directory)
      * @throws Exception
      */
-    public void serializeAPTrustBag(File destinationDir, boolean tar) throws Exception {
+    public File serializeAPTrustBag(File destinationDir, boolean tar) throws Exception {
         if (!destinationDir.exists()) {
             destinationDir.mkdirs();
         } else {
@@ -110,13 +112,17 @@ public abstract class APTrustBag {
         bagInfoFile.delete();
 
         if (tar) {
-            tarDirectory(file);
+            final File tarFile = tarDirectory(file);
             FileUtils.deleteDirectory(file);
+            return tarFile;
+        } else {
+            return file;
         }
     }
 
-    private void tarDirectory(final File file) throws IOException {
-        final FileOutputStream dest = new FileOutputStream(file.getAbsolutePath() + ".tar");
+    private File tarDirectory(final File file) throws IOException {
+        final File tarFile = new File(file.getAbsolutePath() + ".tar");
+        final FileOutputStream dest = new FileOutputStream(tarFile);
         TarOutputStream out = new TarOutputStream(new BufferedOutputStream(dest));
         for(File f : getFilesWithinDir(file, new ArrayList<File>())){
             out.putNextEntry(new TarEntry(f, f.getAbsolutePath().substring(file.getParentFile().getAbsolutePath().length())));
@@ -128,6 +134,7 @@ public abstract class APTrustBag {
             }
         }
         out.close();
+        return tarFile;
     }
 
     public List<File> getFilesWithinDir(File dir, List<File> result) {

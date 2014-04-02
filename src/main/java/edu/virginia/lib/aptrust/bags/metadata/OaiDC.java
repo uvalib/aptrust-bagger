@@ -1,5 +1,8 @@
 package edu.virginia.lib.aptrust.bags.metadata;
 
+import edu.virginia.lib.aptrust.bags.metadata.annotations.APTrustIdentifier;
+import edu.virginia.lib.aptrust.bags.metadata.annotations.APTrustTitle;
+
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Unmarshaller;
@@ -14,9 +17,11 @@ import java.io.InputStream;
 @XmlRootElement(namespace = "http://www.openarchives.org/OAI/2.0/oai_dc/", name="dc")
 public class OaiDC {
 
+    @APTrustIdentifier
     @XmlElement(namespace = "http://purl.org/dc/elements/1.1/")
     public String[] identifier;
 
+    @APTrustTitle
     @XmlElement(namespace = "http://purl.org/dc/elements/1.1/")
     public String[] title;
 
@@ -29,4 +34,5 @@ public class OaiDC {
         Unmarshaller unmarshaller = jc.createUnmarshaller();
         return (OaiDC) unmarshaller.unmarshal(stream);
     }
+
 }

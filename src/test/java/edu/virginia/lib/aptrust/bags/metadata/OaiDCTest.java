@@ -1,6 +1,10 @@
 package edu.virginia.lib.aptrust.bags.metadata;
 
 import edu.virginia.lib.aptrust.bags.metadata.OaiDC;
+import edu.virginia.lib.aptrust.bags.metadata.annotations.APTrustIdentifier;
+import edu.virginia.lib.aptrust.bags.metadata.annotations.APTrustTitle;
+import edu.virginia.lib.aptrust.bags.metadata.annotations.AnnotationUtils;
+import org.junit.Assert;
 import org.junit.Test;
 
 import javax.xml.bind.JAXBException;
@@ -45,6 +49,20 @@ public class OaiDCTest {
         assertEquals(secondIdentifier, dc.identifier[1]);
     }
 
+    @Test
+    public void testIDAnnotation() throws UnsupportedEncodingException, JAXBException {
+        final String identifier = "id";
+        final OaiDC dc = OaiDC.parse(new ByteArrayInputStream(generateDCRecordString(new String[]{identifier}, null).getBytes("UTF-8")));
+        Assert.assertEquals(identifier, AnnotationUtils.getAnnotationValue(APTrustIdentifier.class, dc));
+    }
+
+    @Test
+    public void testTitleAnnotation() throws UnsupportedEncodingException, JAXBException {
+        final String title = "title";
+        final OaiDC dc = OaiDC.parse(new ByteArrayInputStream(generateDCRecordString(null, new String[]{title}).getBytes("UTF-8")));
+        Assert.assertEquals(title, AnnotationUtils.getAnnotationValue(APTrustTitle.class, dc));
+    }
+
     static String generateDCRecordString(String[] identifiers, String[] titles) {
         StringBuffer dc = new StringBuffer();
         dc.append("<oai_dc:dc xmlns:oai_dc=\"http://www.openarchives.org/OAI/2.0/oai_dc/\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xsi:schemaLocation=\"http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd\">");
@@ -61,4 +79,5 @@ public class OaiDCTest {
         dc.append("</oai_dc:dc>");
         return dc.toString();
     }
+
 }

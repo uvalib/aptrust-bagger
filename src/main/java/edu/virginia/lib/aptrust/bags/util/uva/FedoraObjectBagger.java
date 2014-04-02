@@ -8,13 +8,19 @@ import edu.virginia.lib.aptrust.bags.BagInfo;
 import edu.virginia.lib.aptrust.bags.fedora.FedoraHelper;
 import edu.virginia.lib.aptrust.bags.fedora.FedoraObjectBag;
 import edu.virginia.lib.aptrust.bags.metadata.OaiDC;
+import edu.virginia.lib.aptrust.bags.metadata.annotations.APTrustIdentifier;
+import edu.virginia.lib.aptrust.bags.metadata.annotations.APTrustTitle;
+import edu.virginia.lib.aptrust.bags.metadata.annotations.AnnotationUtils;
 
 import javax.xml.bind.JAXBException;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -31,18 +37,18 @@ import java.util.regex.Pattern;
  *   files while the bulk of the logic is hard-coded here for ease of readability.
  * </p>
  */
-public class UvaFedoraObjectBagger {
+public class FedoraObjectBagger {
 
-    private File archiveStoreRoot;
+    protected final File archiveStoreRoot;
 
-    private String defaultRights;
+    private final String defaultRights;
 
-    private String sourceOrganization;
+    private final String sourceOrganization;
 
-    private FedoraClient fc;
+    protected final FedoraClient fc;
 
     /**
-     * Instantiates a UvaFedoraObjectBagger.  For this method to be successful, a properties
+     * Instantiates a FedoraObjectBagger.  For this method to be successful, a properties
      * file must be on the classpath with the name "uva.properties" and must define several
      * properties:
      * <ul>
@@ -60,7 +66,7 @@ public class UvaFedoraObjectBagger {
      * </ul>
      * @param fc a fedora client to access content directly from fedora.
      */
-    public UvaFedoraObjectBagger(FedoraClient fc) throws IOException {
+    public FedoraObjectBagger(FedoraClient fc) throws IOException {
         this.fc = fc;
 
         final Properties p = new Properties();
@@ -78,65 +84,98 @@ public class UvaFedoraObjectBagger {
         sourceOrganization = p.getProperty("source-organization");
     }
 
-    public APTrustBag getObjectBag(String pid) throws FedoraClientException, JAXBException, IOException {
+    /**
+     * Returns an object (expected to be marked up with APTrustIdentifier and APTrustTitle annotations)
+     * representing the main metadata for the given pid.
+     */
+    protected Object getMetadata(String pid, List<String> contentModelPids) throws FedoraClientException, JAXBException, IOException {
         final InputStream dcInputStream = FedoraClient.getDatastreamDissemination(pid, "DC").execute(fc).getEntityInputStream();
-        final OaiDC dc;
         try {
-            dc = OaiDC.parse(dcInputStream);
+            return OaiDC.parse(dcInputStream);
         } finally {
             dcInputStream.close();
         }
-
-        // build the APTrustInfo
-        final APTrustInfo aptrustInfo = new APTrustInfo(dc.getFirstTitle(), defaultRights);
-
-        // build the BagInfo
-        final BagInfo bagInfo = new BagInfo();
-        bagInfo.sourceOrganization(sourceOrganization);
-
-        // locate the master file
-        File masterFile = null;
-        if (dc.identifier != null) {
-            for (String identifier : dc.identifier) {
-                if (identifier.endsWith(".tif")) {
-                    masterFile = locateMasterFile(identifier);
-                    break;
-                }
-            }
-        }
-
-        if (masterFile != null) {
-            return new FedoraObjectBag(bagInfo, aptrustInfo, fc, pid, masterFile, "DC", "descMetadata", "technicalMetadata", "RELS-EXT");
-        } else {
-            return new FedoraObjectBag(bagInfo, aptrustInfo, fc, pid, masterFile, "DC", "descMetadata", "MARC", "RELS-EXT");
-        }
     }
 
-    private File locateMasterFile(final String masterFileName) {
-        Matcher m = Pattern.compile("(\\d+)_\\d+\\.tif").matcher(masterFileName);
-        if (!m.matches()) {
-            return null;
-        }
-        final File masterFile = new File(new File(archiveStoreRoot, m.group(1)), masterFileName);
-        if (masterFile.exists()) {
-            return masterFile;
-        } else {
-            throw new RuntimeException("Master file not found!");
-        }
+    public APTrustBag getObjectBag(String pid) throws Exception {
+        final List<String> contentModelPids = FedoraHelper.getContentModelPIDs(fc, pid);
+
+        Object metadata = getMetadata(pid, contentModelPids);
+
+        // build the APTrustInfo
+        final APTrustInfo aptrustInfo = getAPTrustInfo(metadata);
+
+        // build the BagInfo
+        final BagInfo bagInfo = getBagInfo(metadata);
+
+        // locate the master file
+        File masterFile = locateMasterFile(metadata);
+
+        return new FedoraObjectBag(bagInfo, aptrustInfo, fc, pid, masterFile, getDSIDsToPreserveForContentModels(contentModelPids));
     }
 
     public Iterator<APTrustBag> getSubgraphBag(String rootPid) throws Exception {
         return new ChildIterator(rootPid);
     }
 
+    protected APTrustInfo getAPTrustInfo(Object metadata) {
+        return new APTrustInfo(AnnotationUtils.getAnnotationValue(APTrustTitle.class, metadata), defaultRights);
+    }
+
+    protected BagInfo getBagInfo(Object metadata) {
+        final BagInfo bagInfo = new BagInfo();
+        bagInfo.sourceOrganization(sourceOrganization);
+        return bagInfo;
+    }
+
+    protected File locateMasterFile(Object metadata) {
+        for (String identifier : AnnotationUtils.getAnnotationValues(APTrustIdentifier.class, metadata)) {
+            if (identifier.endsWith(".tif")) {
+                final String masterFileName = identifier;
+                Matcher m = Pattern.compile("(\\d+)_\\d+\\.tif").matcher(masterFileName);
+                if (!m.matches()) {
+                    return null;
+                }
+                final File masterFile = new File(new File(archiveStoreRoot, m.group(1)), masterFileName);
+                if (masterFile.exists()) {
+                    return masterFile;
+                } else {
+                    throw new RuntimeException("Master file not found!");
+                }
+            }
+        }
+        return null;
+    }
+
+    protected String[] getDSIDsToPreserveForContentModels(List<String> contentModels) {
+        if (contentModels.contains("djatoka:jp2CModel")) {
+            return new String[] { "DC", "descMetadata", "technicalMetadata", "RELS-EXT" };
+        } else {
+            return new String[] { "DC", "descMetadata", "MARC", "RELS-EXT" };
+        }
+    }
+
+    protected List<String> getOrderedChildPids(String pid, List<String> contentModelPids) throws Exception {
+        if (contentModelPids.contains("djatoka:jp2CModel")) {
+            return Collections.emptyList();
+        } else {
+            return FedoraHelper.getOrderedParts(fc, pid,
+                    "http://fedora.lib.virginia.edu/relationships#hasCatalogRecordIn",
+                    "http://fedora.lib.virginia.edu/relationships#hasPreceedingPage");
+        }
+    }
+
     private class ChildIterator implements Iterator<APTrustBag> {
+
+        private List<String> contentModelPids;
 
         private Iterator<String> childPids;
 
         public ChildIterator(String parentPid) throws Exception {
+            contentModelPids = FedoraHelper.getContentModelPIDs(fc, parentPid);
             ArrayList<String> pids = new ArrayList<String>();
             pids.add(parentPid);
-            pids.addAll(FedoraHelper.getOrderedParts(fc, parentPid, "http://fedora.lib.virginia.edu/relationships#hasCatalogRecordIn", "http://fedora.lib.virginia.edu/relationships#hasPreceedingPage"));
+            pids.addAll(getOrderedChildPids(parentPid, contentModelPids));
             childPids = pids.iterator();
         }
 

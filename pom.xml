@@ -62,7 +62,7 @@
                                     <value>${source-organization}</value>
                                 </property>
                                 <property>
-                                    <name>bagger.source-organization-ud</name>
+                                    <name>bagger.source-organization-id</name>
                                     <value>${source-organization-id}</value>
                                 </property>
 
@@ -89,6 +89,16 @@
         <groupId>gov.loc</groupId>
         <artifactId>bagit</artifactId>
         <version>4.8</version>
+    </dependency>
+    <dependency>
+      <groupId>com.amazonaws</groupId>
+      <artifactId>aws-java-sdk</artifactId>
+      <version>1.7.5</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.httpcomponents</groupId>
+      <artifactId>httpclient</artifactId>
+      <version>4.2</version>
     </dependency>
     <dependency>
         <groupId>com.yourmediashelf.fedora.client</groupId>
