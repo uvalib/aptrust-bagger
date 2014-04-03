@@ -2,14 +2,22 @@ package edu.virginia.lib.aptrust.bags.util.uva;
 
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.BasicAWSCredentials;
-import com.amazonaws.auth.PropertiesCredentials;
 import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.model.AbortMultipartUploadRequest;
+import com.amazonaws.services.s3.model.CompleteMultipartUploadRequest;
+import com.amazonaws.services.s3.model.CompleteMultipartUploadResult;
+import com.amazonaws.services.s3.model.InitiateMultipartUploadRequest;
+import com.amazonaws.services.s3.model.InitiateMultipartUploadResult;
 import com.amazonaws.services.s3.model.ObjectListing;
-import com.amazonaws.services.s3.model.S3Object;
+import com.amazonaws.services.s3.model.PartETag;
+import com.amazonaws.services.s3.model.PutObjectResult;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
+import com.amazonaws.services.s3.model.UploadPartRequest;
+import com.amazonaws.services.s3.model.UploadPartResult;
 import com.yourmediashelf.fedora.client.FedoraClient;
 import com.yourmediashelf.fedora.client.FedoraCredentials;
 import edu.virginia.lib.aptrust.bags.APTrustBag;
+import edu.virginia.lib.aptrust.bags.BagSummary;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -19,6 +27,7 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
@@ -44,6 +53,17 @@ public class TrialSubmissionBagger {
                 bagger.retainBags();
             } else if ("-t".equals(arg) || "--transfer".equals(arg)) {
                 bagger.transfer();
+            } else if ("-o".equals(arg) || "--overwrite".equals(arg)) {
+                bagger.overwrite();
+            } else if (arg.startsWith("-c=")) {
+                final String size = arg.substring("-c=".length());
+                if (size.endsWith("G") || size.endsWith("g")) {
+                    bagger.chunkSize = Long.parseLong(size) * (1024 * 1024 * 1024);
+                } else if (size.endsWith("M") || size.endsWith("m")) {
+                    bagger.chunkSize = Long.parseLong(size) * (1024 * 1024);
+                } else {
+                    bagger.chunkSize = Long.parseLong(size);
+                }
             } else {
                 throw new IllegalArgumentException("Unexpected argument: " + arg);
             }
@@ -67,6 +87,16 @@ public class TrialSubmissionBagger {
 
     }
 
+    /**
+     * A PrintWriter whose output is a CSV with the following columns:
+     * id
+     * date
+     * event (genereated, transferred)
+     * size
+     * md5
+     * time elapsed
+     * note
+     */
     private PrintWriter report;
 
     private long bytes;
@@ -83,17 +113,26 @@ public class TrialSubmissionBagger {
 
     private boolean retainBags;
 
+    private boolean overwrite;
+
+    private long chunkSize = (5 * 1024 * 1025 * 1024);
+
     public TrialSubmissionBagger(File bagCreationDir, FedoraClient fc) throws FileNotFoundException {
         this.bagCreationDir = bagCreationDir;
         this.fedora = fc;
         bytes = 0;
         transfer = false;
         retainBags = false;
-        report = new PrintWriter(new OutputStreamWriter(new FileOutputStream(new SimpleDateFormat("yyyy-MM-dd HH:mm ss.SSS").format(new Date()) + "-bag-report.txt")));
+        report = new PrintWriter(new OutputStreamWriter(new FileOutputStream(new SimpleDateFormat("yyyy-MM-dd HH:mm ss.SSS").format(new Date()) + "-bag-report.csv")));
+        report.println("id,date,event,size,md5,time elapsed,note");
     }
 
     public void retainBags() {
         retainBags = true;
+    }
+
+    public void overwrite() {
+        overwrite = true;
     }
 
     /**
@@ -123,12 +162,16 @@ public class TrialSubmissionBagger {
         DateFormat df = new SimpleDateFormat("yyyy-MM-dd HH:mm ss.SSS");
         while (bagIt.hasNext()) {
             APTrustBag bag = bagIt.next();
-            File bagFile = bag.serializeAPTrustBag(bagCreationDir, true);
-            report.println(df.format(new Date()) + " " + bagFile.getName() + " " + bagFile.length() + "bytes");
+            final long start = System.currentTimeMillis();
+            final BagSummary bagSummary = bag.serializeAPTrustBag(bagCreationDir, true);
+            final long duration = System.currentTimeMillis() - start;
+            final File bagFile = bagSummary.getFile();
+            report.println(bagFile.getName() + "," + new Date() + ",created," + bagFile.length() + ","
+                    + bagSummary.getBase64Checksum() + "," + duration + ",");
             report.flush();
             bytes += bagFile.length();
             if (s3Client != null) {
-                transferFileIfNotPresent(bagFile);
+                transferFile(bagSummary);
             }
             if (!retainBags) {
                 bagFile.delete();
@@ -136,25 +179,94 @@ public class TrialSubmissionBagger {
         }
     }
 
-    private boolean transferFileIfNotPresent(File f) {
+    /**
+     * Transfers the bag and returns its checksum.
+     * @param bagSummary info about the the file (bag) to transfer
+     */
+    private boolean transferFile(BagSummary bagSummary) {
+        File f = bagSummary.getFile();
         try {
             final S3ObjectSummary o = getObjectSummary(f.getName());
             if (o != null) {
-                report.println(o.getKey() + " already exists: " + o.getSize() + "bytes last modified "
-                        + o.getLastModified());
-                return false;
+                if (overwrite) {
+                    // delete the bag
+                    final long start = System.currentTimeMillis();
+                    s3Client.deleteObject(bucketName, f.getName());
+                    final long duration = System.currentTimeMillis() - start;
+                    report.println(f.getName() + "," + new Date() + ",deleted existing bag," + o.getSize() + ",,"
+                            + duration + ",deleted existing object (created " + o.getLastModified()
+                            + ") on S3 before transfer");
+                    report.flush();
+                } else {
+                    return false;
+                }
             }
 
-
-            final long start = System.currentTimeMillis();
-            s3Client.putObject(bucketName, f.getName(), f);
-            final long time = System.currentTimeMillis() - start;
-            report.println(f.getName() + " transferred to S3 in " + time + "ms.");
+            putFile(f, bagSummary.getBase64Checksum());
+            report.flush();
             return true;
         } catch (Throwable t) {
             report.println("Error transferring file " + f.getName() + "!");
             t.printStackTrace(report);
             return false;
+        }
+    }
+
+    private void putFile(File f, String checksum64) {
+        if (f.length() > chunkSize) {
+            try {
+                putLargeFile(f, checksum64);
+            } catch (IOException e) {
+                report.println("ERROR");
+                e.printStackTrace(report);
+                report.flush();
+            }
+        } else {
+            putSmallFile(f, checksum64);
+        }
+    }
+
+    private void putSmallFile(File f, String checksum64) {
+        final long start = System.currentTimeMillis();
+        final PutObjectResult result = s3Client.putObject(bucketName, f.getName(), f);
+        final String amazonMD5 = result.getContentMd5();
+        final long duration = System.currentTimeMillis() - start;
+        report.println(f.getName() + "," + new Date() + ",transferred to S3," + f.length() + "," + amazonMD5 + ","
+                + duration + "," + (!amazonMD5.equalsIgnoreCase(checksum64) ? "CHECKSUM MISMATCH" : ""));
+        report.flush();
+    }
+
+    private void putLargeFile(File f, String checksum64) throws IOException {
+        final long start = System.currentTimeMillis();
+        final InitiateMultipartUploadRequest req = new InitiateMultipartUploadRequest(bucketName, f.getName());
+        InitiateMultipartUploadResult multipartUploadResult = s3Client.initiateMultipartUpload(req);
+        try {
+            List<PartETag> partETags = new ArrayList<PartETag>();
+            int partNumber = 1;
+            for (long offset = 0; offset < f.length(); offset += chunkSize) {
+                final UploadPartRequest partRequest = new UploadPartRequest()
+                        .withUploadId(multipartUploadResult.getUploadId())
+                        .withPartNumber(partNumber++)
+                        .withPartSize(Math.min(chunkSize, f.length() - offset))
+                        .withBucketName(bucketName)
+                        .withKey(f.getName())
+                        .withFile(f)
+                        .withFileOffset(offset);
+                partRequest.setLastPart(chunkSize >= f.length() - offset);
+                final UploadPartResult result = s3Client.uploadPart(partRequest);
+                partETags.add(result.getPartETag());
+            }
+            CompleteMultipartUploadResult r = s3Client.completeMultipartUpload(new CompleteMultipartUploadRequest(bucketName, f.getName(), multipartUploadResult.getUploadId(), partETags));
+            final long duration = System.currentTimeMillis() - start;
+            final String amazonMD5 = "checksum not yet available";
+            report.println(f.getName() + "," + new Date() + ",transferred to S3," + f.length() + "," + amazonMD5 + ","
+                    + duration + ",");
+            report.flush();
+        } catch (Throwable t) {
+            s3Client.abortMultipartUpload(new AbortMultipartUploadRequest(bucketName, f.getName(), multipartUploadResult.getUploadId()));
+            report.println("ERROR with multipart upload!");
+            t.printStackTrace(report);
+            report.flush();
         }
     }
 

@@ -28,6 +28,8 @@ To invoke it and transfer bags:
 
     mvn clean install exec:java -Dexec.mainClass=edu.virginia.lib.aptrust.bags.util.uva.TrialSubmissionBagger -Dexec.args="-t"
 
+(add the -o or --overwrite flag to overwrite existing bags)
+
 To invoke it to stage bags (but not transfer them):
 
     mvn clean install exec:java -Dexec.mainClass=edu.virginia.lib.aptrust.bags.util.uva.TrialSubmissionBagger -Dexec.args="-r"

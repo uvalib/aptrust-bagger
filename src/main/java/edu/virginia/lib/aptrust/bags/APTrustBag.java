@@ -21,6 +21,9 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -45,11 +48,11 @@ public abstract class APTrustBag {
      * @param tar if true, a tar file will be the ultimate output, if false a simple
      *            directory structure (note: the current implementation writes out
      *            a directory structure first and tars it second)
-     * @return the file that represents the root of the bag (either the tar file or
-     * the bag directory)
+     * @return a BagSummary referencing the the file that represents the root of the bag
+     * (either the tar file or the bag directory) and a checksum if the bag is a tar file
      * @throws Exception
      */
-    public File serializeAPTrustBag(File destinationDir, boolean tar) throws Exception {
+    public BagSummary serializeAPTrustBag(File destinationDir, boolean tar) throws Exception {
         if (!destinationDir.exists()) {
             destinationDir.mkdirs();
         } else {
@@ -112,17 +115,17 @@ public abstract class APTrustBag {
         bagInfoFile.delete();
 
         if (tar) {
-            final File tarFile = tarDirectory(file);
+            final BagSummary result = tarDirectory(file);
             FileUtils.deleteDirectory(file);
-            return tarFile;
+            return result;
         } else {
-            return file;
+            return new BagSummary(file, null);
         }
     }
 
-    private File tarDirectory(final File file) throws IOException {
+    private BagSummary tarDirectory(final File file) throws IOException {
         final File tarFile = new File(file.getAbsolutePath() + ".tar");
-        final FileOutputStream dest = new FileOutputStream(tarFile);
+        final HashOutputStream dest = new HashOutputStream(new FileOutputStream(tarFile));
         TarOutputStream out = new TarOutputStream(new BufferedOutputStream(dest));
         for(File f : getFilesWithinDir(file, new ArrayList<File>())){
             out.putNextEntry(new TarEntry(f, f.getAbsolutePath().substring(file.getParentFile().getAbsolutePath().length())));
@@ -134,7 +137,7 @@ public abstract class APTrustBag {
             }
         }
         out.close();
-        return tarFile;
+        return new BagSummary(tarFile, dest.getMD5Hash());
     }
 
     public List<File> getFilesWithinDir(File dir, List<File> result) {
@@ -161,4 +164,50 @@ public abstract class APTrustBag {
     protected abstract String getItemId();
 
     protected abstract List<File> getPayloadFiles() throws Exception;
+
+    /**
+     * An OutputStream that computes a hash of the content passed through it.
+     */
+    public static class HashOutputStream extends OutputStream {
+
+        private MessageDigest digest;
+
+        private OutputStream pipe;
+
+        public HashOutputStream(OutputStream os) {
+            pipe = os;
+            try {
+                digest = MessageDigest.getInstance("MD5");
+            } catch (NoSuchAlgorithmException ex) {
+                // can't happen because MD5 is supported by all JVMs
+                assert false;
+            }
+        }
+
+        public byte[] getMD5Hash() {
+            return digest.digest();
+        }
+
+        public void write(int b) throws IOException {
+            digest.update(new byte[] { (byte) b });
+            pipe.write(b);
+        }
+
+        public void write(byte[] b, int off, int len) throws IOException {
+            digest.update(b, off, len);
+            pipe.write(b, off, len);
+        }
+
+        public void write(byte[] b) throws IOException {
+            digest.update(b);
+            pipe.write(b);
+        }
+
+        public static byte[] getMD5Hash(String value) throws IOException {
+            HashOutputStream os = new HashOutputStream(new ByteArrayOutputStream());
+            os.write(value.getBytes("UTF-8"));
+            os.close();
+            return os.getMD5Hash();
+        }
+    }
 }
