@@ -39,4 +39,9 @@ public class FileBag extends APTrustBag {
     protected List<File> getPayloadFiles() throws Exception {
         return files;
     }
+
+    @Override
+    protected void freePayloadFile(File f) throws Exception {
+        // does nothing
+    }
 }

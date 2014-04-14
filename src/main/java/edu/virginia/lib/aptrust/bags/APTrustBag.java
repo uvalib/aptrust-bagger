@@ -65,6 +65,8 @@ public abstract class APTrustBag {
         final Bag b = f.createBag();
         final Bag.BagPartFactory partFactory = f.getBagPartFactory();
 
+        final List<File> payload = getPayloadFiles();
+
         // write the bagit.txt
         b.putBagFile(partFactory.createBagItTxt());
 
@@ -73,7 +75,7 @@ public abstract class APTrustBag {
         final FileOutputStream manifestOS = new FileOutputStream(manifestFile);
         try {
             final ManifestWriter manifestWriter = f.getBagPartFactory().createManifestWriter(manifestOS);
-            for (File payloadFile : getPayloadFiles()) {
+            for (File payloadFile : payload) {
                 manifestWriter.write("data/" + payloadFile.getName(), MessageDigestHelper.generateFixity(payloadFile, Manifest.Algorithm.MD5));
             }
             manifestWriter.close();
@@ -107,9 +109,12 @@ public abstract class APTrustBag {
             aptrustInfoOS.close();
         }
 
-        b.addFilesToPayload(getPayloadFiles());
+        b.addFilesToPayload(payload);
         b.write(new FileSystemWriter(f), file);
 
+        for (File payloadFile : payload) {
+            freePayloadFile(payloadFile);
+        }
         manifestFile.delete();
         aptrustInfoFile.delete();
         bagInfoFile.delete();
@@ -164,6 +169,13 @@ public abstract class APTrustBag {
     protected abstract String getItemId();
 
     protected abstract List<File> getPayloadFiles() throws Exception;
+
+    /**
+     * Will be called once the payload file (returned by getPayloadFiles())
+     * has been used and will not be needed.  This allows temporary files
+     * to be cleaned up by implementing classes.
+     */
+    protected abstract void freePayloadFile(File f) throws Exception;
 
     /**
      * An OutputStream that computes a hash of the content passed through it.

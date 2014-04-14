@@ -28,6 +28,8 @@ public class FedoraObjectBag extends APTrustBag {
 
     private File master;
 
+    private File tempDir;
+
     /**
      * A constructor for a bag of a fedora object that has no master file (such as
      * an object that serves only to organize other objects).
@@ -46,6 +48,8 @@ public class FedoraObjectBag extends APTrustBag {
         fc = client;
         this.dsIdsToPreserve = dsIdsToPreserve;
         this.master = masterFile;
+        this.tempDir = new File("target" + File.pathSeparatorChar + "tmp" + File.pathSeparatorChar + this.getItemId());
+        this.tempDir.mkdirs();
     }
 
     @Override
@@ -64,8 +68,16 @@ public class FedoraObjectBag extends APTrustBag {
         return payload;
     }
 
+    @Override
+    protected void freePayloadFile(File f) throws Exception {
+        if (f.getParentFile().equals(tempDir)) {
+            f.delete();
+        }
+        tempDir.delete();
+    }
+
     private File downloadAndCacheDatastreamFile(final String dsId) throws IOException, FedoraClientException {
-        final File f = File.createTempFile("datastream-" + dsId, ".binary");
+        final File f = new File(tempDir, "datastream-" + dsId);
         final FileOutputStream fos = new FileOutputStream(f);
         try {
             IOUtils.copy(FedoraClient.getDatastreamDissemination(pid, dsId).execute(fc).getEntityInputStream(), fos);
