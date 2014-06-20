@@ -41,7 +41,7 @@ public class FedoraObjectBagger {
 
     protected final File archiveStoreRoot;
 
-    private final String defaultRights;
+    private final String defaultAccess;
 
     private final String sourceOrganization;
 
@@ -57,7 +57,7 @@ public class FedoraObjectBagger {
      *         files may be found)
      *     </li>
      *     <li>
-     *         default-rights: the default rights restrictions for created bags
+     *         default-access: the default access rights restrictions for created bags
      *     </li>
      *     <li>
      *         source-organization: a string that will populate the source-organization field
@@ -80,7 +80,7 @@ public class FedoraObjectBagger {
             is.close();
         }
         archiveStoreRoot = new File(p.getProperty("archive-store-root"));
-        defaultRights = p.getProperty("default-rights");
+        defaultAccess = p.getProperty("default-access");
         sourceOrganization = p.getProperty("source-organization");
     }
 
@@ -119,7 +119,7 @@ public class FedoraObjectBagger {
     }
 
     protected APTrustInfo getAPTrustInfo(Object metadata) {
-        return new APTrustInfo(AnnotationUtils.getAnnotationValue(APTrustTitle.class, metadata), defaultRights);
+        return new APTrustInfo(AnnotationUtils.getAnnotationValue(APTrustTitle.class, metadata), defaultAccess);
     }
 
     protected BagInfo getBagInfo(Object metadata) {

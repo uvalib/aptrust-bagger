@@ -30,6 +30,9 @@ import java.util.List;
 /**
  * An abstract class that encapsualtes the requirements for creating and serializing
  * a Bagit bag meeting the specifications for submission materials for AP Trust.
+ *
+ * The specs are available online here:
+ * https://sites.google.com/a/aptrust.org/aptrust-wiki/technical-documentation/processing-ingest/aptrust-bagit-profile
  */
 public abstract class APTrustBag {
 
@@ -102,7 +105,7 @@ public abstract class APTrustBag {
         try {
             final BagItTxtWriter aptrustInfoWriter = f.getBagPartFactory().createBagItTxtWriter(aptrustInfoOS, "UTF-8");
             aptrustInfoWriter.write("Title", aptrustInfo.getTitle());
-            aptrustInfoWriter.write("Rights", aptrustInfo.getRights());
+            aptrustInfoWriter.write("Access", aptrustInfo.getAccess());
             aptrustInfoOS.close();
             b.addFileAsTag(aptrustInfoFile);
         } finally {

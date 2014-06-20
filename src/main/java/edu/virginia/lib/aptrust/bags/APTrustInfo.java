@@ -11,13 +11,13 @@ public class APTrustInfo {
     public static final String INSTITUTION = "Institution";
 
     final private String title;
-    final private String rights;
+    final private String access;
 
-    public APTrustInfo(String title, String rights) {
-        if (CONSORTIA.equals(rights) || RESTRICTED.equals(rights) || INSTITUTION.equals(rights)) {
-            this.rights = rights;
+    public APTrustInfo(String title, String access) {
+        if (CONSORTIA.equals(access) || RESTRICTED.equals(access) || INSTITUTION.equals(access)) {
+            this.access = access;
         } else {
-            throw new IllegalArgumentException("Illegal \"rights\" value: \"" + rights + "\"");
+            throw new IllegalArgumentException("Illegal \"access\" value: \"" + access + "\"");
         }
         this.title = title;
     }
@@ -26,8 +26,8 @@ public class APTrustInfo {
         return this.title;
     }
 
-    public String getRights() {
-        return this.rights;
+    public String getAccess() {
+        return this.access;
     }
 
 }
