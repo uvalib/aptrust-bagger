@@ -17,7 +17,7 @@ public class BagSummaryTest {
     public void setUp() throws NoSuchAlgorithmException {
         final MessageDigest digest = MessageDigest.getInstance("MD5");
         digest.update("test".getBytes());
-        example = new BagSummary(new File("test"), digest.digest());
+        example = new BagSummary(new File("test"), digest.digest(), "", 0);
     }
 
     @Test

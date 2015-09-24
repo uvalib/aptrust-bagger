@@ -56,6 +56,7 @@ public abstract class APTrustBag {
      * @throws Exception
      */
     public BagSummary serializeAPTrustBag(File destinationDir, boolean tar) throws Exception {
+    	long payloadSize = 0;
         if (!destinationDir.exists()) {
             destinationDir.mkdirs();
         } else {
@@ -74,12 +75,17 @@ public abstract class APTrustBag {
         b.putBagFile(partFactory.createBagItTxt());
 
         // write the manifest
+        final StringBuffer manifestCopy = new StringBuffer();
         final File manifestFile = new File("manifest-md5.txt");
         final FileOutputStream manifestOS = new FileOutputStream(manifestFile);
         try {
             final ManifestWriter manifestWriter = f.getBagPartFactory().createManifestWriter(manifestOS);
             for (File payloadFile : payload) {
-                manifestWriter.write("data/" + payloadFile.getName(), MessageDigestHelper.generateFixity(payloadFile, Manifest.Algorithm.MD5));
+            	payloadSize += payloadFile.length();
+            	final String filename = "data/" + payloadFile.getName();
+            	final String fixity = MessageDigestHelper.generateFixity(payloadFile, Manifest.Algorithm.MD5);
+            	manifestCopy.append(fixity + "  " + filename + "\n");
+                manifestWriter.write(filename, fixity);
             }
             manifestWriter.close();
             b.addFileAsTag(manifestFile);
@@ -123,15 +129,15 @@ public abstract class APTrustBag {
         bagInfoFile.delete();
 
         if (tar) {
-            final BagSummary result = tarDirectory(file);
+            final BagSummary result = tarDirectory(file, manifestCopy.toString(), payloadSize);
             FileUtils.deleteDirectory(file);
             return result;
         } else {
-            return new BagSummary(file, null);
+            return new BagSummary(file, null, manifestCopy.toString(), payloadSize);
         }
     }
 
-    private BagSummary tarDirectory(final File file) throws IOException {
+    private BagSummary tarDirectory(final File file, String manifestCopy, long payloadSize) throws IOException {
         final File tarFile = new File(file.getAbsolutePath() + ".tar");
         final HashOutputStream dest = new HashOutputStream(new FileOutputStream(tarFile));
         TarOutputStream out = new TarOutputStream(new BufferedOutputStream(dest));
@@ -145,7 +151,7 @@ public abstract class APTrustBag {
             }
         }
         out.close();
-        return new BagSummary(tarFile, dest.getMD5Hash());
+        return new BagSummary(tarFile, dest.getMD5Hash(), manifestCopy, payloadSize);
     }
 
     public List<File> getFilesWithinDir(File dir, List<File> result) {
