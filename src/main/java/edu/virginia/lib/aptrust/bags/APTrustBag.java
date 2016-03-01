@@ -1,21 +1,5 @@
 package edu.virginia.lib.aptrust.bags;
 
-import gov.loc.repository.bagit.Bag;
-import gov.loc.repository.bagit.BagFactory;
-import gov.loc.repository.bagit.BagInfoTxtWriter;
-import gov.loc.repository.bagit.BagItTxtWriter;
-import gov.loc.repository.bagit.Manifest;
-import gov.loc.repository.bagit.ManifestWriter;
-import gov.loc.repository.bagit.impl.StringBagFile;
-import gov.loc.repository.bagit.utilities.MessageDigestHelper;
-import gov.loc.repository.bagit.writer.impl.FileSystemWriter;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.IOUtils;
-import org.xeustechnologies.jtar.TarEntry;
-import org.xeustechnologies.jtar.TarOutputStream;
-
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -24,8 +8,20 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
 import java.util.List;
+
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
+
+import edu.virginia.lib.aptrust.bags.util.OutputDrainerThread;
+import gov.loc.repository.bagit.Bag;
+import gov.loc.repository.bagit.BagFactory;
+import gov.loc.repository.bagit.BagInfoTxtWriter;
+import gov.loc.repository.bagit.BagItTxtWriter;
+import gov.loc.repository.bagit.Manifest;
+import gov.loc.repository.bagit.ManifestWriter;
+import gov.loc.repository.bagit.utilities.MessageDigestHelper;
+import gov.loc.repository.bagit.writer.impl.FileSystemWriter;
 
 /**
  * An abstract class that encapsualtes the requirements for creating and serializing
@@ -137,20 +133,24 @@ public abstract class APTrustBag {
         }
     }
 
-    private BagSummary tarDirectory(final File file, String manifestCopy, long payloadSize) throws IOException {
+    private BagSummary tarDirectory(final File file, String manifestCopy, long payloadSize) throws IOException, InterruptedException {
         final File tarFile = new File(file.getAbsolutePath() + ".tar");
-        final HashOutputStream dest = new HashOutputStream(new FileOutputStream(tarFile));
-        TarOutputStream out = new TarOutputStream(new BufferedOutputStream(dest));
-        for(File f : getFilesWithinDir(file, new ArrayList<File>())){
-            out.putNextEntry(new TarEntry(f, f.getAbsolutePath().substring(file.getParentFile().getAbsolutePath().length())));
-            FileInputStream fis = new FileInputStream(f);
-            try {
-                IOUtils.copy(fis, out);
-            } finally {
-                fis.close();
-            }
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ProcessBuilder pb = new ProcessBuilder("tar", "-cvf", tarFile.getAbsolutePath(), file.getName());
+        pb.directory(file.getParentFile());
+        Process p = pb.start();
+        
+        new Thread(new OutputDrainerThread(p.getInputStream(), baos)).start();
+        new Thread(new OutputDrainerThread(p.getErrorStream(), baos)).start();
+        int returnCode = p.waitFor();
+        if (returnCode != 0) {
+            throw new RuntimeException("Invalid return code for process! " + new String(baos.toByteArray(), "UTF-8"));
         }
-        out.close();
+        final HashOutputStream dest = new HashOutputStream();
+        FileInputStream fis = new FileInputStream(tarFile);
+        IOUtils.copy(fis, dest);
+        fis.close();
+        
         return new BagSummary(tarFile, dest.getMD5Hash(), manifestCopy, payloadSize);
     }
 
@@ -195,6 +195,10 @@ public abstract class APTrustBag {
 
         private OutputStream pipe;
 
+        public HashOutputStream() {
+            this(null);
+        }
+        
         public HashOutputStream(OutputStream os) {
             pipe = os;
             try {
@@ -211,17 +215,23 @@ public abstract class APTrustBag {
 
         public void write(int b) throws IOException {
             digest.update(new byte[] { (byte) b });
-            pipe.write(b);
+            if (pipe != null) {
+                pipe.write(b);
+            }
         }
 
         public void write(byte[] b, int off, int len) throws IOException {
             digest.update(b, off, len);
-            pipe.write(b, off, len);
+            if (pipe != null) {
+                pipe.write(b, off, len);
+            }
         }
 
         public void write(byte[] b) throws IOException {
             digest.update(b);
-            pipe.write(b);
+            if (pipe != null) {
+                pipe.write(b);
+            }
         }
 
         public static byte[] getMD5Hash(String value) throws IOException {
