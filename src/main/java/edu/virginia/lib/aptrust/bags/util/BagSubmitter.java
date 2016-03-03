@@ -89,6 +89,7 @@ public class BagSubmitter {
         final PutObjectResult result = s3Client.putObject(bucketName, f.getName(), f);
         t.transferred = true;
         t.amazonBagChecksum = result.getContentMd5();
+        t.etag = result.getETag();
         final long duration = System.currentTimeMillis() - start;
         LOGGER.info(f.getName() + "," + new Date() + ",transferred to S3," + f.length() + "," + t.amazonBagChecksum + ","
                 + duration + "," + (!t.amazonBagChecksum.equalsIgnoreCase(checksum64) ? "CHECKSUM MISMATCH" : ""));
@@ -117,6 +118,7 @@ public class BagSubmitter {
             CompleteMultipartUploadResult r = s3Client.completeMultipartUpload(new CompleteMultipartUploadRequest(bucketName, f.getName(), multipartUploadResult.getUploadId(), partETags));
             final long duration = System.currentTimeMillis() - start;
             t.amazonBagChecksum = "checksum not yet available";
+            t.etag = r.getETag();
             LOGGER.info(f.getName() + "," + new Date() + ",transferred to S3," + f.length() + "," + t.amazonBagChecksum + ","
                     + duration + ",");
             t.transferred = true;
@@ -159,6 +161,8 @@ public class BagSubmitter {
         private long endTime;
 
         private String message;
+        
+        private String etag;
 
         public static TransferSummary WOULD_NOT_OVERWRITE() {
             TransferSummary t = new TransferSummary();
@@ -193,6 +197,13 @@ public class BagSubmitter {
 
         public long getDuration() {
             return this.endTime - this.startTime;
+        }
+        
+        /**
+         * Gets the ETAG (a string that uniquely identifies the pushed bag).
+         */
+        public String getEtag() {
+            return this.etag;
         }
 
     }
