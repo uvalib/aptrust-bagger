@@ -1,9 +1,13 @@
 package edu.virginia.lib.aptrust.bags;
 
-import gov.loc.repository.bagit.BagInfoTxtWriter;
+import gov.loc.repository.bagit.domain.Bag;
+import gov.loc.repository.bagit.domain.Metadata;
 
 import java.text.SimpleDateFormat;
+import java.util.AbstractMap;
 import java.util.Date;
+import java.util.List;
+import java.util.Map;
 
 /**
  * A class that encapsulates the information needed for the baginfo-info.txt
@@ -92,13 +96,14 @@ public class BagInfo {
     /**
      * A convenience method to help serialize this objects as a BagInfo TXT file.
      */
-    public void write(BagInfoTxtWriter writer) {
-        writer.write("Source-Organization", getSourceOrganization());
-        writer.write("Bagging-Date", getBaggingDate());
-        writer.write("Bag-Count", String.valueOf(getBagCount()));
-        writer.write("Bag-Group-Identifier", getBagGroupIdentifier());
-        writer.write("Internal-Sender-Description", getInternalSenderDescription());
-        writer.write("Internal-Sender-Identifier", getInternalSenderIdentifier());
+    public void addToMetadata(Bag b) {
+        final Metadata metadata = b.getMetadata();
+        if (getSourceOrganization() != null) metadata.add("Source-Organization", getSourceOrganization());
+        if (getBaggingDate() != null) metadata.add("Bagging-Date", getBaggingDate());
+        metadata.add("Bag-Count", String.valueOf(getBagCount()));
+        if (getBagGroupIdentifier() != null) metadata.add("Bag-Group-Identifier", getBagGroupIdentifier());
+        if (getInternalSenderDescription() != null) metadata.add("Internal-Sender-Description", getInternalSenderDescription());
+        if (getInternalSenderIdentifier() != null) metadata.add("Internal-Sender-Identifier", getInternalSenderIdentifier());
     }
 
 }

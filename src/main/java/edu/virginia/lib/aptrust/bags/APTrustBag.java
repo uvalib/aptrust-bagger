@@ -1,27 +1,37 @@
 package edu.virginia.lib.aptrust.bags;
 
+import edu.virginia.lib.aptrust.bags.util.OutputDrainerThread;
+import gov.loc.repository.bagit.creator.CreatePayloadManifestsVistor;
+import gov.loc.repository.bagit.domain.Bag;
+import gov.loc.repository.bagit.domain.Manifest;
+import gov.loc.repository.bagit.domain.Version;
+import gov.loc.repository.bagit.hash.Hasher;
+import gov.loc.repository.bagit.hash.StandardSupportedAlgorithms;
+import gov.loc.repository.bagit.hash.SupportedAlgorithm;
+import gov.loc.repository.bagit.writer.BagitFileWriter;
+import gov.loc.repository.bagit.writer.ManifestWriter;
+import gov.loc.repository.bagit.writer.MetadataWriter;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.IOUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.charset.Charset;
+import java.nio.file.FileSystemException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Collections;
 import java.util.List;
-
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.IOUtils;
-
-import edu.virginia.lib.aptrust.bags.util.OutputDrainerThread;
-import gov.loc.repository.bagit.Bag;
-import gov.loc.repository.bagit.BagFactory;
-import gov.loc.repository.bagit.BagInfoTxtWriter;
-import gov.loc.repository.bagit.BagItTxtWriter;
-import gov.loc.repository.bagit.Manifest;
-import gov.loc.repository.bagit.ManifestWriter;
-import gov.loc.repository.bagit.utilities.MessageDigestHelper;
-import gov.loc.repository.bagit.writer.impl.FileSystemWriter;
+import java.util.Map;
 
 /**
  * An abstract class that encapsualtes the requirements for creating and serializing
@@ -31,6 +41,8 @@ import gov.loc.repository.bagit.writer.impl.FileSystemWriter;
  * https://sites.google.com/a/aptrust.org/aptrust-wiki/technical-documentation/processing-ingest/aptrust-bagit-profile
  */
 public abstract class APTrustBag {
+
+    final private static Logger LOGGER = LoggerFactory.getLogger(APTrustBag.class);
 
     private BagInfo bagInfo;
 
@@ -60,76 +72,70 @@ public abstract class APTrustBag {
                 throw new IllegalArgumentException(destinationDir + " is not a directory!");
             }
         }
-        File file = new File(destinationDir, getAptrustBagName());
-        BagFactory f = new BagFactory();
-        final Bag b = f.createBag();
-        final Bag.BagPartFactory partFactory = f.getBagPartFactory();
+        File bagOutputFile = new File(destinationDir, getAptrustBagName());
+        bagOutputFile.mkdirs();
 
-        final List<File> payload = getPayloadFiles();
+        final Bag b = new Bag(new Version(0, 97));
+        b.setRootDir(bagOutputFile.toPath());
+        Charset charset = b.getFileEncoding();
+
+        final List<PendingPayloadFile> payload = getPayloadFiles();
 
         // write the bagit.txt
-        b.putBagFile(partFactory.createBagItTxt());
+        BagitFileWriter.writeBagitFile(b.getVersion(), b.getFileEncoding(), b.getRootDir());
 
-        // write the manifest
-        final StringBuffer manifestCopy = new StringBuffer();
-        final File manifestFile = new File("manifest-md5.txt");
-        final FileOutputStream manifestOS = new FileOutputStream(manifestFile);
-        try {
-            final ManifestWriter manifestWriter = f.getBagPartFactory().createManifestWriter(manifestOS);
-            for (File payloadFile : payload) {
-            	payloadSize += payloadFile.length();
-            	final String filename = "data/" + payloadFile.getName();
-            	final String fixity = MessageDigestHelper.generateFixity(payloadFile, Manifest.Algorithm.MD5);
-            	manifestCopy.append(fixity + "  " + filename + "\n");
-                manifestWriter.write(filename, fixity);
+        // bring in the payload
+        File dataDir = new File(b.getRootDir().toFile(), "data");
+        for (PendingPayloadFile payloadFile : payload) {
+            payloadSize += payloadFile.getFile().length();
+            final Path destination = new File(dataDir, payloadFile.getPathWithinPayload()).toPath();
+            destination.getParent().toFile().mkdirs();
+            try {
+                Files.createLink(destination, payloadFile.getFile().toPath());
+            } catch (FileSystemException e) {
+                LOGGER.info("Exception hard-linking bag payload! (performing aopy)", e);
+                Files.copy(payloadFile.getFile().toPath(), destination);
             }
-            manifestWriter.close();
-            b.addFileAsTag(manifestFile);
-        } finally {
-            manifestOS.close();
-        }
-
-        // write the bag-info.txt
-        final File bagInfoFile = new File("bag-info.txt");
-        final FileOutputStream bagInfoOS = new FileOutputStream(bagInfoFile);
-        try {
-            final BagInfoTxtWriter bagInfoWriter = f.getBagPartFactory().createBagInfoTxtWriter(bagInfoOS, "UTF-8");
-            bagInfo.write(bagInfoWriter);
-            bagInfoOS.close();
-            b.addFileAsTag(bagInfoFile);
-        } finally {
-            bagInfoOS.close();
-        }
-
-        // write the aptrust-info.txt
-        final File aptrustInfoFile = new File("aptrust-info.txt");
-        final FileOutputStream aptrustInfoOS = new FileOutputStream(aptrustInfoFile);
-        try {
-            final BagItTxtWriter aptrustInfoWriter = f.getBagPartFactory().createBagItTxtWriter(aptrustInfoOS, "UTF-8");
-            aptrustInfoWriter.write("Title", aptrustInfo.getTitle());
-            aptrustInfoWriter.write("Access", aptrustInfo.getAccess());
-            aptrustInfoOS.close();
-            b.addFileAsTag(aptrustInfoFile);
-        } finally {
-            aptrustInfoOS.close();
-        }
-
-        b.addFilesToPayload(payload);
-        b.write(new FileSystemWriter(f), file);
-
-        for (File payloadFile : payload) {
             freePayloadFile(payloadFile);
         }
-        manifestFile.delete();
-        aptrustInfoFile.delete();
-        bagInfoFile.delete();
+
+        // write the payload manifest
+        SupportedAlgorithm algorithm = StandardSupportedAlgorithms.SHA256;
+        //Manifest manifest = new Manifest(algorithm);
+        MessageDigest messageDigest = MessageDigest.getInstance(algorithm.getMessageDigestName());
+        final Map<Manifest, MessageDigest> manifestToMessageDigestMap = Hasher.createManifestToMessageDigestMap(Collections.singleton(algorithm));
+        //manifestToMessageDigestMap.put(manifest, messageDigest);
+        CreatePayloadManifestsVistor visitor = new CreatePayloadManifestsVistor(manifestToMessageDigestMap, false);
+        Files.walkFileTree(Paths.get(dataDir.toURI()), visitor);
+        b.getPayLoadManifests().addAll(manifestToMessageDigestMap.keySet());
+        ManifestWriter.writePayloadManifests(b.getPayLoadManifests(), b.getRootDir(), b.getRootDir(), b.getFileEncoding());
+        final String manifestCopy = FileUtils.readFileToString(new File(b.getRootDir().toFile(), "manifest-sha256.txt"));
+
+        // write bag-info.txt
+        bagInfo.addToMetadata(b);
+        MetadataWriter.writeBagMetadata(b.getMetadata(), b.getVersion(), b.getRootDir(), b.getFileEncoding());
+
+        // write the aptrust-info.txt
+        final Path aptrustInfoPath = new File(b.getRootDir().toFile(), "aptrust-info.txt").toPath();
+        Files.write(aptrustInfoPath, ("Title : " + aptrustInfo.getTitle() + System.lineSeparator()).getBytes(charset),
+                StandardOpenOption.APPEND, StandardOpenOption.CREATE);
+        Files.write(aptrustInfoPath, ("Access : " + aptrustInfo.getAccess() + System.lineSeparator()).getBytes(charset),
+                StandardOpenOption.APPEND, StandardOpenOption.CREATE);
+
+        // write the tag manifest
+        Manifest tagManifest = new Manifest(algorithm);
+        tagManifest.getFileToChecksumMap().put(aptrustInfoPath, Hasher.hash(aptrustInfoPath, messageDigest));
+        final File bagInfoFile = new File(b.getRootDir().toFile(), "bag-info.txt");
+        tagManifest.getFileToChecksumMap().put(bagInfoFile.toPath(), Hasher.hash(bagInfoFile.toPath(), messageDigest));
+        b.getTagManifests().add(tagManifest);
+        ManifestWriter.writeTagManifests(b.getTagManifests(), b.getRootDir(), b.getRootDir(), b.getFileEncoding());
 
         if (tar) {
-            final BagSummary result = tarDirectory(file, manifestCopy.toString(), payloadSize);
-            FileUtils.deleteDirectory(file);
+            final BagSummary result = tarDirectory(bagOutputFile, manifestCopy.toString(), payloadSize);
+            FileUtils.deleteDirectory(bagOutputFile);
             return result;
         } else {
-            return new BagSummary(file, null, manifestCopy.toString(), payloadSize);
+            return new BagSummary(bagOutputFile, null, manifestCopy.toString(), payloadSize);
         }
     }
 
@@ -177,14 +183,14 @@ public abstract class APTrustBag {
 
     protected abstract String getItemId();
 
-    protected abstract List<File> getPayloadFiles() throws Exception;
+    protected abstract List<PendingPayloadFile> getPayloadFiles() throws Exception;
 
     /**
      * Will be called once the payload file (returned by getPayloadFiles())
      * has been used and will not be needed.  This allows temporary files
      * to be cleaned up by implementing classes.
      */
-    protected abstract void freePayloadFile(File f) throws Exception;
+    protected abstract void freePayloadFile(PendingPayloadFile f) throws Exception;
 
     /**
      * An OutputStream that computes a hash of the content passed through it.

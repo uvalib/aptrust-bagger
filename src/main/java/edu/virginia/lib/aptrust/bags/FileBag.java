@@ -16,15 +16,27 @@ public class FileBag extends APTrustBag {
 
     private String id;
 
-    private List<File> files;
+    private List<PendingPayloadFile> files;
 
     public FileBag(BagInfo bagInfo, APTrustInfo apTrustInfo, String id, Collection<File> files) {
         super(bagInfo, apTrustInfo);
         this.id = id;
-        this.files = new ArrayList<File>(files);
+        this.files = new ArrayList<PendingPayloadFile>();
+        for (File f : files) {
+            this.files.add(new PendingPayloadFile(f));
+        }
     }
 
     public FileBag(BagInfo bagInfo, APTrustInfo apTrustInfo, String id, File ... files) {
+        super(bagInfo, apTrustInfo);
+        this.id = id;
+        this.files = new ArrayList<PendingPayloadFile>();
+        for (File f : files) {
+            this.files.add(new PendingPayloadFile(f));
+        }
+    }
+
+    public FileBag(BagInfo bagInfo, APTrustInfo apTrustInfo, String id, PendingPayloadFile ... files) {
         super(bagInfo, apTrustInfo);
         this.id = id;
         this.files = Arrays.asList(files);
@@ -36,12 +48,12 @@ public class FileBag extends APTrustBag {
     }
 
     @Override
-    protected List<File> getPayloadFiles() throws Exception {
+    protected List<PendingPayloadFile> getPayloadFiles() throws Exception {
         return files;
     }
 
     @Override
-    protected void freePayloadFile(File f) throws Exception {
+    protected void freePayloadFile(PendingPayloadFile f) throws Exception {
         // does nothing
     }
 }

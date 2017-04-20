@@ -1,8 +1,9 @@
 package edu.virginia.lib.aptrust.bags;
 
-import gov.loc.repository.bagit.Bag;
-import gov.loc.repository.bagit.BagFactory;
-import gov.loc.repository.bagit.utilities.SimpleResult;
+import gov.loc.repository.bagit.domain.Bag;
+import gov.loc.repository.bagit.exceptions.CorruptChecksumException;
+import gov.loc.repository.bagit.reader.BagReader;
+import gov.loc.repository.bagit.verify.BagVerifier;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
@@ -36,8 +37,8 @@ public class FileBagTest extends APTrustBagTest {
         File f2 = new File(UUID.randomUUID().toString());
         FileBag b = new FileBag(null, null, id, Arrays.asList(new File[]{f1, f2}));
         Assert.assertEquals("ID must be preserved!", id, b.getItemId());
-        Assert.assertEquals("Passed files must be preserved!", f1, b.getPayloadFiles().get(0));
-        Assert.assertEquals("Passed files must be preserved!", f2, b.getPayloadFiles().get(1));
+        Assert.assertEquals("Passed files must be preserved!", f1, b.getPayloadFiles().get(0).getFile());
+        Assert.assertEquals("Passed files must be preserved!", f2, b.getPayloadFiles().get(1).getFile());
     }
 
     @Test
@@ -47,8 +48,8 @@ public class FileBagTest extends APTrustBagTest {
         File f2 = new File(UUID.randomUUID().toString());
         FileBag b = new FileBag(null, null, id, f1, f2);
         Assert.assertEquals("ID must be preserved!", id, b.getItemId());
-        Assert.assertEquals("Passed files must be preserved!", f1, b.getPayloadFiles().get(0));
-        Assert.assertEquals("Passed files must be preserved!", f2, b.getPayloadFiles().get(1));
+        Assert.assertEquals("Passed files must be preserved!", f1, b.getPayloadFiles().get(0).getFile());
+        Assert.assertEquals("Passed files must be preserved!", f2, b.getPayloadFiles().get(1).getFile());
     }
 
     @Test
@@ -60,19 +61,21 @@ public class FileBagTest extends APTrustBagTest {
         BagInfo bagInfo = new BagInfo();
         APTrustInfo aptrustInfo = new APTrustInfo("Title", APTrustInfo.CONSORTIA);
 
-        FileBag b = new FileBag(bagInfo, aptrustInfo, id, f1, f2);
+        FileBag b = new FileBag(bagInfo, aptrustInfo, id, new PendingPayloadFile(f1, "f1.random"), new PendingPayloadFile(f2, "subdir/f2.random"));
         b.serializeAPTrustBag(outputDir, false);
 
-        final BagFactory f = new BagFactory();
-        Bag parsedBag = f.createBag(new File(outputDir, b.getInstitutionalId() + "." + b.getItemId()));
-        SimpleResult validity = parsedBag.verifyValid();
-        for (String message : validity.getMessages()) {
-            System.out.println(message);
+        BagReader r = new BagReader();
+        final Bag bag = r.read(new File(outputDir, b.getInstitutionalId() + "." + b.getItemId()).toPath());
+        try {
+            BagVerifier v = new BagVerifier();
+            v.isValid(bag, false);
+        } catch (Throwable t) {
+            t.printStackTrace();
+            Assert.fail("Bag should be valid! " + t.getMessage());
         }
-        Assert.assertTrue("Bag should be valid!", validity.isSuccess());
     }
 
-    @Test
+    @Test(expected=CorruptChecksumException.class)
     public void testCorruptedBagSerialization() throws Exception {
         String id = UUID.randomUUID().toString();
         File f1 = createDummyFile(500);
@@ -93,9 +96,10 @@ public class FileBagTest extends APTrustBagTest {
             fos.close();
         }
 
-        final BagFactory f = new BagFactory();
-        Bag parsedBag = f.createBag(bagRoot);
-        Assert.assertFalse("Bag should be invalid!", parsedBag.verifyValid().isSuccess());
+        BagReader r = new BagReader();
+        final Bag bag = r.read(bagRoot.toPath());
+        BagVerifier v = new BagVerifier();
+        v.isValid(bag, false);
     }
 
     private File createDummyFile(long length) throws IOException {
