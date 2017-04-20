@@ -18,8 +18,8 @@ public class FileBag extends APTrustBag {
 
     private List<PendingPayloadFile> files;
 
-    public FileBag(BagInfo bagInfo, APTrustInfo apTrustInfo, String id, Collection<File> files) {
-        super(bagInfo, apTrustInfo);
+    public FileBag(final String institutionId, BagInfo bagInfo, APTrustInfo apTrustInfo, String id, Collection<File> files) {
+        super(institutionId, bagInfo, apTrustInfo);
         this.id = id;
         this.files = new ArrayList<PendingPayloadFile>();
         for (File f : files) {
@@ -27,8 +27,8 @@ public class FileBag extends APTrustBag {
         }
     }
 
-    public FileBag(BagInfo bagInfo, APTrustInfo apTrustInfo, String id, File ... files) {
-        super(bagInfo, apTrustInfo);
+    public FileBag(final String institutionId, BagInfo bagInfo, APTrustInfo apTrustInfo, String id, File ... files) {
+        super(institutionId, bagInfo, apTrustInfo);
         this.id = id;
         this.files = new ArrayList<PendingPayloadFile>();
         for (File f : files) {
@@ -36,8 +36,8 @@ public class FileBag extends APTrustBag {
         }
     }
 
-    public FileBag(BagInfo bagInfo, APTrustInfo apTrustInfo, String id, PendingPayloadFile ... files) {
-        super(bagInfo, apTrustInfo);
+    public FileBag(final String institutionId, BagInfo bagInfo, APTrustInfo apTrustInfo, String id, PendingPayloadFile ... files) {
+        super(institutionId, bagInfo, apTrustInfo);
         this.id = id;
         this.files = Arrays.asList(files);
     }

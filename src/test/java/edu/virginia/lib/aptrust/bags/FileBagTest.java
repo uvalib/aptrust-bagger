@@ -35,7 +35,7 @@ public class FileBagTest extends APTrustBagTest {
         String id = UUID.randomUUID().toString();
         File f1 = new File(UUID.randomUUID().toString());
         File f2 = new File(UUID.randomUUID().toString());
-        FileBag b = new FileBag(null, null, id, Arrays.asList(new File[]{f1, f2}));
+        FileBag b = new FileBag("test", null, null, id, Arrays.asList(new File[]{f1, f2}));
         Assert.assertEquals("ID must be preserved!", id, b.getItemId());
         Assert.assertEquals("Passed files must be preserved!", f1, b.getPayloadFiles().get(0).getFile());
         Assert.assertEquals("Passed files must be preserved!", f2, b.getPayloadFiles().get(1).getFile());
@@ -46,7 +46,7 @@ public class FileBagTest extends APTrustBagTest {
         String id = UUID.randomUUID().toString();
         File f1 = new File(UUID.randomUUID().toString());
         File f2 = new File(UUID.randomUUID().toString());
-        FileBag b = new FileBag(null, null, id, f1, f2);
+        FileBag b = new FileBag("test", null, null, id, f1, f2);
         Assert.assertEquals("ID must be preserved!", id, b.getItemId());
         Assert.assertEquals("Passed files must be preserved!", f1, b.getPayloadFiles().get(0).getFile());
         Assert.assertEquals("Passed files must be preserved!", f2, b.getPayloadFiles().get(1).getFile());
@@ -61,7 +61,7 @@ public class FileBagTest extends APTrustBagTest {
         BagInfo bagInfo = new BagInfo();
         APTrustInfo aptrustInfo = new APTrustInfo("Title", APTrustInfo.CONSORTIA);
 
-        FileBag b = new FileBag(bagInfo, aptrustInfo, id, new PendingPayloadFile(f1, "f1.random"), new PendingPayloadFile(f2, "subdir/f2.random"));
+        FileBag b = new FileBag("test", bagInfo, aptrustInfo, id, new PendingPayloadFile(f1, "f1.random"), new PendingPayloadFile(f2, "subdir/f2.random"));
         b.serializeAPTrustBag(outputDir, false);
 
         BagReader r = new BagReader();
@@ -84,7 +84,7 @@ public class FileBagTest extends APTrustBagTest {
         BagInfo bagInfo = new BagInfo();
         APTrustInfo aptrustInfo = new APTrustInfo("Title", APTrustInfo.CONSORTIA);
 
-        FileBag b = new FileBag(bagInfo, aptrustInfo, id, f1, f2);
+        FileBag b = new FileBag("test", bagInfo, aptrustInfo, id, f1, f2);
         b.serializeAPTrustBag(outputDir, false);
 
         File bagRoot = new File(outputDir, b.getInstitutionalId() + "." + b.getItemId());

@@ -44,13 +44,16 @@ public abstract class APTrustBag {
 
     final private static Logger LOGGER = LoggerFactory.getLogger(APTrustBag.class);
 
+    private String institutionId;
+
     private BagInfo bagInfo;
 
     private APTrustInfo aptrustInfo;
 
-    public APTrustBag(BagInfo bagInfo, APTrustInfo aptrustInfo) {
+    public APTrustBag(final String institutionId, final BagInfo bagInfo, final APTrustInfo aptrustInfo) {
         this.bagInfo = bagInfo;
         this.aptrustInfo = aptrustInfo;
+        this.institutionId = institutionId;
     }
 
     /**
@@ -176,9 +179,7 @@ public abstract class APTrustBag {
     }
 
     protected String getInstitutionalId() {
-        // this should be provided by the build environment
-        String id = System.getProperty("bagger.source-organization-id");
-        return id == null ? "test" : id;
+        return institutionId;
     }
 
     protected abstract String getItemId();

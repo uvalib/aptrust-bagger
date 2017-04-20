@@ -11,7 +11,7 @@ public abstract class APTrustBagTest {
     public void testTar() throws Exception {
         File tempFile = File.createTempFile("prefix", "suffix");
         FileUtils.writeStringToFile(tempFile, "THIS IS THE CONTENT OF THE FILE");
-        APTrustBag b = new FileBag(new BagInfo(), new APTrustInfo("Title", "Consortia"), "test", tempFile);
+        APTrustBag b = new FileBag("test", new BagInfo(), new APTrustInfo("Title", "Consortia"), "test", tempFile);
         b.serializeAPTrustBag(new File("target"), true);
     }
     
